@@ -87,10 +87,6 @@ xmrig::Network::Network(Controller *controller) :
     const Pools &pools = controller->config()->pools();
     m_strategy = pools.createStrategy(this);
 
-    if (pools.donateLevel() > 0) {
-        m_donate = new DonateStrategy(controller, this);
-    }
-
     m_timer = new Timer(this, kTickInterval, kTickInterval);
 }
 
@@ -113,11 +109,6 @@ void xmrig::Network::connect()
 
 void xmrig::Network::onActive(IStrategy *strategy, IClient *client)
 {
-    if (m_donate && m_donate == strategy) {
-        LOG_NOTICE("%s " WHITE_BOLD("dev donate started"), tag);
-        return;
-    }
-
     m_state.onActive(client);
 
     const char *tlsVersion = client->tlsVersion();
@@ -149,21 +140,12 @@ void xmrig::Network::onConfigChanged(Config *config, Config *previousConfig)
 
 void xmrig::Network::onJob(IStrategy *strategy, IClient *client, const Job &job)
 {
-    if (m_donate && m_donate->isActive() && m_donate != strategy) {
-        return;
-    }
-
     setJob(client, job, m_donate == strategy);
 }
 
 
 void xmrig::Network::onJobResult(const JobResult &result)
 {
-    if (result.index == 1 && m_donate) {
-        m_donate->submit(result);
-        return;
-    }
-
     m_strategy->submit(result);
 }
 
@@ -262,7 +244,7 @@ void xmrig::Network::setJob(IClient *client, const Job &job, bool donate)
     }
 
     m_state.diff = job.diff();
-    m_controller->miner()->setJob(job, donate);
+    m_controller->miner()->setJob(job, false);
 }
 
 
@@ -271,10 +253,6 @@ void xmrig::Network::tick()
     const uint64_t now = Chrono::steadyMSecs();
 
     m_strategy->tick(now);
-
-    if (m_donate) {
-        m_donate->tick(now);
-    }
 }
 
 
